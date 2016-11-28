@@ -218,6 +218,8 @@ gdv_file = construct.Struct(
 #
 class BitReader:
     def __init__(self, bytes):
+        if len(bytes) == 0:
+            return
         self.bytes = ''.join(chr(x) for x in bytes)
         self.pos = 0
         self.queue = struct.unpack("<I", self.bytes[0x00:0x04])[0]
@@ -247,23 +249,29 @@ class BitReader:
 #
 class FrameDecoder:
     def __init__(self, frame_width, frame_height, frame_header, bytes, pos, prev_frame=None):
+        #print frame_header
         self.reader = BitReader(bytes)
         self.pixels = StringIO.StringIO()
         self.frame_header = frame_header
-        if frame_header.type_flags.half_resolution_mode != 1:
-            raise ValueError("FrameDecoder - half_resolution_mode : TODO")
-        if prev_frame == None:
-            self.pixels.write("\x00" * int((frame_width * frame_height) * 0.5))
-        else:
-            self.pixels.write(prev_frame)
-        self.pixels.seek(pos, 0x00)
+
         # Used when the offset used by copy pixel is greater
         # than the file position indicator
-        self.inv_offset = ""
+        #self.inv_offset = ""
         for i in xrange(0, 256):
-            self.inv_offset += chr(i) * 8
+            #self.inv_offset += chr(i) * 8
+            self.pixels.write(chr(i) * 8)
         for i in xrange(0, 256):
-            self.inv_offset += chr(i) * 8
+            #self.inv_offset += chr(i) * 8
+            self.pixels.write(chr(i) * 8)
+
+        #if frame_header.type_flags.half_resolution_mode != 1:
+        #    raise ValueError("FrameDecoder - half_resolution_mode : TODO")
+        if prev_frame == None:
+            #self.pixels.write("\x00" * int((frame_width * frame_height) * 0.5))
+            self.pixels.write("\x00" * int((frame_width * frame_height)))
+        else:
+            self.pixels.write(prev_frame)
+        self.pixels.seek(pos + 4096, 0x00)
         self.decoding = {"METHOD_01" : self.decode_method_01,
                          "METHOD_02" : self.decode_method_02,
                          "METHOD_03" : self.decode_method_03,
@@ -300,9 +308,9 @@ class FrameDecoder:
         pix = self.pixels.read(0x01)
         self.pixels.seek(saved)
         return pix
-        
+
     def get_pixels(self):
-        self.pixels.seek(0x00, 0x00)
+        self.pixels.seek(0x00 + 4096, 0x00)
         return self.pixels.read()
 
     def decode(self):
@@ -315,7 +323,8 @@ class FrameDecoder:
         raise ValueError("[TODO] decode_method_02")
 
     def decode_method_03(self):
-        raise ValueError("[TODO] decode_method_03")
+        # do nothing
+        pass
 
     def decode_method_04(self):
         raise ValueError("[TODO] decode_method_04")
@@ -376,9 +385,9 @@ class FrameDecoder:
             return True
         length = ord(self.get_byte())
         if length & 0x80 == 0:
-            self.pixels.seek(length + 18, 0x01)
+            self.pixels.seek(length + 0x12, 0x01)
             return True
-        self.pixels.seek((((length & 0x7F) << 8) | ord(self.get_byte())) + 146, 0x01)
+        self.pixels.seek((((length & 0x7F) << 8) | ord(self.get_byte())) + 0x92, 0x01)
         return True
 
     def method_08_tag_02(self):
@@ -396,11 +405,11 @@ class FrameDecoder:
                 return True
             else:
                 offset = offset + 1
-                if offset > self.pixels.tell():
-                    v = 4096 - offset - self.pixels.tell()
-                    self.pixels.write(self.inv_offset[-v:-v + length])
-                else:
-                    self.copy_pixels(-offset, length)
+                #if offset > self.pixels.tell():
+                #    v = 4096 - offset - self.pixels.tell()
+                #    self.pixels.write(self.inv_offset[-v:-v + length])
+                #else:
+                self.copy_pixels(-offset, length)
                 return True
         next_4 = self.get_bits(0x04)
         next_byte = ord(self.get_byte())
@@ -426,10 +435,10 @@ class FrameDecoder:
                 self.pixels.write(self.get_pixel(-1) * length)
             return True
         offset = 4096 - offset
-        if offset > self.pixels.tell():
-            v = offset - self.pixels.tell()
-            self.pixels.write(self.inv_offset[-v:-v + length])
-            return True
+        #if offset > self.pixels.tell():
+        #    v = offset - self.pixels.tell()
+        #    self.pixels.write(self.inv_offset[-v:-v + length])
+        #    return True
         self.copy_pixels(-offset, length)
         return True
 
@@ -461,10 +470,10 @@ class FrameDecoder:
                 self.pixels.write(self.get_pixel(-1) * length)
             return True
         offset = 4096 - offset
-        if offset > self.pixels.tell():
-            v = offset - self.pixels.tell()# - 1
-            self.pixels.write(self.inv_offset[-v:-v + length])
-            return True
+        #if offset > self.pixels.tell():
+        #    v = offset - self.pixels.tell()
+        #    #self.pixels.write(self.inv_offset[-v:-v + length])
+        #    return True
         self.copy_pixels(-offset, length)
         return True
 
@@ -520,6 +529,7 @@ class GDV:
             return
         prev_frame = None
         for frame_num in xrange(0, self.gdv_file.gdv_header.nb_frames):
+            print "[+] Working on %d" % frame_num
             video = self.gdv_file.chunks()[frame_num].video
             frame = FrameDecoder(self.gdv_file.gdv_header.frame_width,
                         self.gdv_file.gdv_header.frame_height,
