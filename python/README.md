@@ -18,7 +18,7 @@
 | .DAT      |                          |
 | .DRV      |                          |
 | .EXE      |                          |
-| .GDV      | [GDV](/python/GDV/)      |
+| .GDV      | [GDV](python/GDV/)       |
 | .INI      |                          |
 | .MTX      |                          |
 | .PIF      |                          |
