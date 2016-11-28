@@ -2,7 +2,7 @@ import os
 import construct
 import argparse
 import wave
-import Image
+from PIL import Image
 import struct
 import StringIO
 
