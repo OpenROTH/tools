@@ -24,7 +24,7 @@
 | .PIF      |                          |
 | .RAW      |                          |
 | .RES      |                          |
-| .SFX      |                          |
+| .SFX      | [SFX](sfx/)              |
 | .TXT      |                          |
 
 [python_2_7]: http://www.python.org/getit/
