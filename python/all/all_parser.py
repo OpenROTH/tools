@@ -1,10 +1,7 @@
 import os
 import construct
 import argparse
-import wave
 from PIL import Image
-import struct
-import StringIO
 
 # Built for construct >= 2.8
 # Version 2.8 was released on September, 2016.
