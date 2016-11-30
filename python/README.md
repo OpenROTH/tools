@@ -15,7 +15,7 @@
 | .BAT      |                          |
 | .BNK      |                          |
 | .DAS      |                          |
-| .DAT      |                          |
+| .DAT      | [DAT](dat/)              |
 | .DRV      |                          |
 | .EXE      |                          |
 | .GDV      | [GDV](gdv/)              |
