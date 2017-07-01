@@ -12,6 +12,7 @@ import argparse
 if 2 <= construct.version[0] and 8 > construct.version[1]:
     raise ValueError("Built for construct >= 2.8 only")
 
+
 def hexdump(src, length=16):
     FILTER = ''.join([(len(repr(chr(x))) == 3) and chr(x) or '.' for x in range(256)])
     lines = []
@@ -21,7 +22,14 @@ def hexdump(src, length=16):
         printable = ''.join(["%s" % ((ord(x) <= 127 and FILTER[ord(x)]) or '.') for x in chars])
         lines.append("%04x  %-*s  %s\n" % (c, length*3, hex, printable))
     return ''.join(lines).rstrip('\n')
-    
+
+dbase100_cutscene_entry = construct.Struct(
+    "name"                      / construct.String(8),
+    "unk_dword_12"              / construct.Int32ul,
+    "dbase400_cutscene_offset"  / construct.Int32ul,
+    "unk_dword_13"              / construct.Int32ul
+)
+
 dbase100_file = construct.Struct(
     "signature"                 / construct.Const("DBASE100"),     # + 0x00
     "unk_dword_01"              / construct.Int32ul,               # + 0x08
@@ -30,25 +38,25 @@ dbase100_file = construct.Struct(
     "ns_offset_00"              / construct.Int32ul,               # + 0x14        // offset
     "unk_dword_05"              / construct.Int32ul,               # + 0x18
     "ns_offset_01"              / construct.Int32ul,               # + 0x1C        // offset
-    "unk_dword_07"              / construct.Int32ul,               # + 0x20        // nb * 0x14
-    "ns_offset_02"              / construct.Int32ul,               # + 0x24        // offset
-    "nb_dbase400"               / construct.Int32ul,               # + 0x28        // nb * 0x04
-    "dbase400_table_offset"     / construct.Int32ul,               # + 0x2C        // offset
+    "nb_dbase400_cutscene"      / construct.Int32ul,               # + 0x20        // nb * 0x14
+    "dbase400_table_offset_cutscene" / construct.Int32ul,          # + 0x24        // offset
+    "nb_dbase400_interface"     / construct.Int32ul,               # + 0x28        // nb * 0x04
+    "dbase400_table_offset_interface" / construct.Int32ul,         # + 0x2C        // offset
     "unk_dword_11"              / construct.Int32ul,               # + 0x30
-    
-    "dbase400_offset"           / construct.OnDemandPointer(lambda ctx: ctx.dbase400_table_offset, construct.Array(lambda ctx: ctx.nb_dbase400, construct.Int32ul)),
-    
-    "dbase100_offset_00"           / construct.OnDemandPointer(lambda ctx: ctx.ns_offset_00, construct.Array(lambda ctx: ctx.unk_dword_03, construct.Int32ul)),
-    "dbase100_offset_01"           / construct.OnDemandPointer(lambda ctx: ctx.ns_offset_01, construct.Array(lambda ctx: ctx.unk_dword_05, construct.Int32ul))
+
+    "dbase400_offset_cutscene"  / construct.OnDemandPointer(lambda ctx: ctx.dbase400_table_offset_cutscene, construct.Array(lambda ctx: ctx.nb_dbase400_cutscene, dbase100_cutscene_entry)),
+    "dbase400_offset_interface" / construct.OnDemandPointer(lambda ctx: ctx.dbase400_table_offset_interface, construct.Array(lambda ctx: ctx.nb_dbase400_interface, construct.Int32ul)),
+    "dbase100_offset_00"        / construct.OnDemandPointer(lambda ctx: ctx.ns_offset_00, construct.Array(lambda ctx: ctx.unk_dword_03, construct.Int32ul)),
+    "dbase100_offset_01"        / construct.OnDemandPointer(lambda ctx: ctx.ns_offset_01, construct.Array(lambda ctx: ctx.unk_dword_05, construct.Int32ul))
 )
-    
+
 dbase400_entry = construct.Struct(
     "unk_dword_00"          / construct.Int32ul,                        # + 0x00
     "length"                / construct.Int16ul,                        # + 0x04
-    "unk_word_01"           / construct.Int16ul,                        # + 0x06
-    "name"                  / construct.String(lambda ctx: ctx.length)  # + 0x08
+    "font_color"            / construct.Int16ul,                        # + 0x06
+    "string"                / construct.Aligned(4, construct.String(lambda ctx: ctx.length))  # + 0x08
 )
-    
+
 dbase400_file = construct.Struct(
     "signature"          / construct.Const("DBASE400"),     # + 0x00
     "all"                / construct.Array(2, dbase400_entry)
@@ -67,11 +75,18 @@ if __name__ == '__main__':
     dbfile = dbase100_file.parse_stream(stream)
     print dbfile
 
-    db400_stream = open("D:\Game\Realms of the Haunting\DATA\DBASE400.DAT", "rb")
-    for db400_ofsset in dbfile.dbase400_offset():
-        db400_stream.seek(db400_ofsset, 0x00)
+    db400_file = os.path.join(os.path.dirname(args.dbase_file), "DBASE400.DAT")
+    db400_stream = open(db400_file, "rb")
+
+    for db400_offset in dbfile.dbase400_offset_cutscene():
+        db400_stream.seek(db400_offset.dbase400_cutscene_offset, 0x00)
         db400_entry = dbase400_entry.parse_stream(db400_stream)
-        print db400_entry
+        print "db400 cutscene: " + str(db400_entry)
+
+    for db400_offset in dbfile.dbase400_offset_interface():
+        db400_stream.seek(db400_offset, 0x00)
+        db400_entry = dbase400_entry.parse_stream(db400_stream)
+        print "db400 interface: " + str(db400_entry)
     
     print "[+] unk_dword_03 : 0x%08X" % dbfile.unk_dword_03
     print "[+] ns_offset_00 : 0x%08X" % dbfile.ns_offset_00
@@ -81,11 +96,6 @@ if __name__ == '__main__':
     print "[+] unk_dword_05 : 0x%08X" % dbfile.unk_dword_05
     print "[+] ns_offset_01 : 0x%08X" % dbfile.ns_offset_01
     stream.seek(dbfile.ns_offset_01, 0x00)
-    print hexdump(stream.read(0x20))
-    
-    print "[+] unk_dword_07 : 0x%08X" % dbfile.unk_dword_07
-    print "[+] ns_offset_02 : 0x%08X" % dbfile.ns_offset_02
-    stream.seek(dbfile.ns_offset_02, 0x00)
     print hexdump(stream.read(0x20))
     
     for db100_offset in dbfile.dbase100_offset_00():   # sizeof == +0x18
@@ -104,10 +114,9 @@ if __name__ == '__main__':
         #print v
         db400_stream.seek(v, 0x00)
         db400_entry = dbase400_entry.parse_stream(db400_stream)
-        print db400_entry
+        print "db400 sec. stream: " + str(db400_entry)
         
     i = []
-        
     for db100_offset in dbfile.dbase100_offset_01():   # sizeof == +0x18
         i.append(db100_offset)
         #if db100_offset == 0x00:
