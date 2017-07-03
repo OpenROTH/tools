@@ -31,16 +31,32 @@ dbase100_cutscene_entry = Struct(
 )
 
 # FIXME: There counts only first DBASE400 entry, but they can be more
+# item_type:
+# 0x00 - generic
+# 0x01 - weapon
+# 0x02 - characters and important info
+# 0x03 - magic items (?)
+# 0x04 - books, notes, letters etc.
+# 0x12 - Adam Randall, protagonist
+# 0x20 - coin
+# 0x21 - ammo
+# 0x40 - interactive items
+# 0x43 - consumable or wearable items
 dbase100_inventory_entry = Struct(
     "length"                    / Int16ul,
-    "unk_byte_01"               / Int8ul,
-    "unk_byte_02"               / Int8ul,
-    "unk_dword_01"              / Int32ul,
-    "unk_dword_02"              / Int32ul,
-    "unk_dword_03"              / Int32ul,
+    "unk_word_01"               / Int16ul,
+    "closeup_type"              / Int8ul,       # 0x00 - simple object (infinitive looping), 0x09 - play once
+    "item_type"                 / Int8ul,
+    "unk_byte_02"               / Int8ul,       # always 0
+    "unk_byte_03"               / Int8ul,       # always 0
+    "closeup_image"             / Int32ul,      # animated image in inventory
+    "inventory_image"           / Int32ul,      # image in inventory
     "dbase400_inventory_offset" / Int32ul,
+    "add_length"                / Int16ul,
+    "unk_byte_04"               / Int8ul,       # always 0
+    "unk_byte_05"               / Int8ul,
     "unk_dword_04"              / Int32ul,
-    "unk_bytes_01"              / Bytes(lambda ctx: ctx.length - 20)
+    "unk_bytes_01"              / Bytes(lambda ctx: ctx.add_length)
 )
 
 dbase100_inventory_offset = Struct(
@@ -69,17 +85,17 @@ dbase100_file = Struct(
 )
 
 dbase400_subtitle = Struct(
-    "length"                / Int16ul,
+    "length_str"            / Int16ul,
     "unk_word_00"           / Int16ul,        # duration?
     "font_color"            / Int8ul,
-    "string"                / Aligned(4, String(lambda ctx: ctx.length - 5))    # FIXME what about zero-length string?
+    "string"                / Aligned(4, String(lambda ctx: ctx.length_ste - 5))    # FIXME what about zero-length string?
 )
 
 dbase400_entry = Struct(
-    "unk_dword_00"          / Int32ul,                        # + 0x00
-    "length"                / Int16ul,                        # + 0x04
+    "offset_dbase500"       / Int32ul,                        # + 0x00
+    "length_str"            / Int16ul,                        # + 0x04
     "font_color"            / Int16ul,                        # + 0x06
-    "string"                / Aligned(4, String(lambda ctx: ctx.length))  # + 0x08
+    "string"                / Aligned(4, String(lambda ctx: ctx.length_str))  # + 0x08
 )
 
 dbase400_file = Struct(
@@ -117,12 +133,7 @@ if __name__ == '__main__':
         db400_stream.seek(db400_offset, 0x00)
         db400_entry = dbase400_entry.parse_stream(db400_stream)
         print "db400 interface: " + str(db400_entry)
-    
-    #print "[+] unk_dword_03 : 0x%08X" % dbfile.unk_dword_03
-    #print "[+] ns_offset_00 : 0x%08X" % dbfile.ns_offset_00
-    #stream.seek(dbfile.ns_offset_00, 0x00)
-    #print hexdump(stream.read(0x20))
-    
+
     print "[+] unk_dword_05 : 0x%08X" % dbfile.unk_dword_05
     print "[+] ns_offset_01 : 0x%08X" % dbfile.ns_offset_01
     stream.seek(dbfile.ns_offset_01, 0x00)
