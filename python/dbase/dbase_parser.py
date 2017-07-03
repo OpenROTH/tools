@@ -25,9 +25,10 @@ def hexdump(src, length=16):
 
 dbase100_cutscene_entry = Struct(
     "name"                      / String(8),
-    "unk_dword_12"              / Int32ul,
-    "dbase400_cutscene_offset"  / Int32ul,
-    "unk_dword_13"              / Int32ul
+    "unk_word_01"               / Int16ul,          # Always 0 (Padding?)
+    "length_subtitles"          / Int16ul,          # Zero if no subtitles
+    "offset_dbase400"           / Int32ul,
+    "dbase400_subtitles_offset" / Int32ul           # Zero if no subtitles
 )
 
 # FIXME: There counts only first DBASE400 entry, but they can be more
@@ -51,7 +52,7 @@ dbase100_inventory_entry = Struct(
     "unk_byte_03"               / Int8ul,       # always 0
     "closeup_image"             / Int32ul,      # animated image in inventory
     "inventory_image"           / Int32ul,      # image in inventory
-    "dbase400_inventory_offset" / Int32ul,
+    "offset_dbase400"           / Int32ul,
     "add_length"                / Int16ul,
     "unk_byte_04"               / Int8ul,       # always 0
     "unk_byte_05"               / Int8ul,
@@ -69,18 +70,18 @@ dbase100_file = Struct(
     "filesize"                  / Int32ul,               # + 0x08
     "unk_dword_02"              / Int32ul,               # + 0x0C
     "nb_dbase100_inventory"     / Int32ul,               # + 0x10
-    "dbase100_table_offset_inventory"   / Int32ul,       # + 0x14        // offset
+    "dbase100_table_inventory"  / Int32ul,               # + 0x14        // offset
     "unk_dword_05"              / Int32ul,               # + 0x18
     "ns_offset_01"              / Int32ul,               # + 0x1C        // offset
     "nb_dbase400_cutscene"      / Int32ul,               # + 0x20        // nb * 0x14
-    "dbase400_table_offset_cutscene"    / Int32ul,       # + 0x24        // offset
+    "dbase400_table_cutscene"   / Int32ul,               # + 0x24        // offset
     "nb_dbase400_interface"     / Int32ul,               # + 0x28        // nb * 0x04
-    "dbase400_table_offset_interface"   / Int32ul,       # + 0x2C        // offset
+    "dbase400_table_interface"  / Int32ul,               # + 0x2C        // offset
     "unk_dword_11"              / Int32ul,               # + 0x30
 
-    "dbase100_offset_inventory" / Pointer(lambda ctx: ctx.dbase100_table_offset_inventory, Array(lambda ctx: ctx.nb_dbase100_inventory, dbase100_inventory_offset)),
-    "dbase400_offset_cutscene"  / OnDemandPointer(lambda ctx: ctx.dbase400_table_offset_cutscene, Array(lambda ctx: ctx.nb_dbase400_cutscene, dbase100_cutscene_entry)),
-    "dbase400_offset_interface" / OnDemandPointer(lambda ctx: ctx.dbase400_table_offset_interface, Array(lambda ctx: ctx.nb_dbase400_interface, Int32ul)),
+    "dbase100_offset_inventory" / Pointer(lambda ctx: ctx.dbase100_table_inventory, Array(lambda ctx: ctx.nb_dbase100_inventory, dbase100_inventory_offset)),
+    "dbase400_offset_cutscene"  / Pointer(lambda ctx: ctx.dbase400_table_cutscene, Array(lambda ctx: ctx.nb_dbase400_cutscene, dbase100_cutscene_entry)),
+    "dbase400_offset_interface" / Pointer(lambda ctx: ctx.dbase400_table_interface, Array(lambda ctx: ctx.nb_dbase400_interface, Int32ul)),
     "dbase100_offset_01"        / OnDemandPointer(lambda ctx: ctx.ns_offset_01, Array(lambda ctx: ctx.unk_dword_05, Int32ul))
 )
 
@@ -120,16 +121,16 @@ if __name__ == '__main__':
     db400_stream = open(db400_file, "rb")
 
     for db400_offset in dbfile.dbase100_offset_inventory:
-        db400_stream.seek(db400_offset.entry.dbase400_inventory_offset, 0x00)
+        db400_stream.seek(db400_offset.entry.offset_dbase400, 0x00)
         db400_entry = dbase400_entry.parse_stream(db400_stream)
         print "db400 inventory: " + str(db400_entry)
 
-    for db400_offset in dbfile.dbase400_offset_cutscene():
-        db400_stream.seek(db400_offset.dbase400_cutscene_offset, 0x00)
+    for db400_offset in dbfile.dbase400_offset_cutscene:
+        db400_stream.seek(db400_offset.offset_dbase400, 0x00)
         db400_entry = dbase400_entry.parse_stream(db400_stream)
         print "db400 cutscene: " + str(db400_entry)
 
-    for db400_offset in dbfile.dbase400_offset_interface():
+    for db400_offset in dbfile.dbase400_offset_interface:
         db400_stream.seek(db400_offset, 0x00)
         db400_entry = dbase400_entry.parse_stream(db400_stream)
         print "db400 interface: " + str(db400_entry)
