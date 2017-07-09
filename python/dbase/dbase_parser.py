@@ -28,7 +28,19 @@ dbase100_cutscene_entry = Struct(
     "unk_word_01"               / Int16ul,          # Always 0 (Padding?)
     "length_subtitles"          / Int16ul,          # Zero if no subtitles
     "offset_dbase400"           / Int32ul,
-    "dbase400_subtitles_offset" / Int32ul           # Zero if no subtitles
+    "offset_dbase400_subtitles" / Int32ul           # Zero if no subtitles
+)
+
+dbase400_subtitle = Aligned(2, Struct(
+    "length_str"            / Int16ul,
+    "unk_word_00"           / Int16ul,        # duration?
+    "font_color"            / Int8ul,
+    "string"                / String(lambda ctx: ctx.length_str - 5)
+)
+                            )
+dbase400_subtitle_sequence = Struct(
+    "dbase400_subtitle"     / GreedyRange(dbase400_subtitle),
+    "end_of_subtitle"       / Const(b"\x00\x00\xff\xff")
 )
 
 # FIXME: There counts only first DBASE400 entry, but they can be more
@@ -85,18 +97,12 @@ dbase100_file = Struct(
     "dbase100_offset_01"        / OnDemandPointer(lambda ctx: ctx.ns_offset_01, Array(lambda ctx: ctx.unk_dword_05, Int32ul))
 )
 
-dbase400_subtitle = Struct(
-    "length_str"            / Int16ul,
-    "unk_word_00"           / Int16ul,        # duration?
-    "font_color"            / Int8ul,
-    "string"                / Aligned(4, String(lambda ctx: ctx.length_ste - 5))    # FIXME what about zero-length string?
-)
-
-dbase400_entry = Struct(
+dbase400_entry = Aligned(4, Struct(
     "offset_dbase500"       / Int32ul,                        # + 0x00
     "length_str"            / Int16ul,                        # + 0x04
     "font_color"            / Int16ul,                        # + 0x06
-    "string"                / Aligned(4, String(lambda ctx: ctx.length_str))  # + 0x08
+    "string"                / String(lambda ctx: ctx.length_str)  # + 0x08
+)
 )
 
 dbase400_file = Struct(
@@ -129,6 +135,11 @@ if __name__ == '__main__':
         db400_stream.seek(db400_offset.offset_dbase400, 0x00)
         db400_entry = dbase400_entry.parse_stream(db400_stream)
         print "db400 cutscene: " + str(db400_entry)
+
+        if db400_offset.offset_dbase400_subtitles != 0:
+            db400_stream.seek(db400_offset.offset_dbase400_subtitles, 0x00)
+            db400_entry = dbase400_subtitle_sequence.parse_stream(db400_stream)
+            print "db400 subtitles: " + str(db400_entry)
 
     for db400_offset in dbfile.dbase400_offset_interface:
         db400_stream.seek(db400_offset, 0x00)
