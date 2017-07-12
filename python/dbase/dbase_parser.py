@@ -77,14 +77,30 @@ dbase100_inventory_offset = Struct(
     "entry"                     / Pointer(lambda ctx: ctx.offset, dbase100_inventory_entry)
 )
 
+dbase100_opcode = Struct(
+    "value"                     / BytesInteger(3, False, True),
+    "command"                   / Int8ul
+)
+
+dbase100_action_entry = Struct(
+    "length"                    / Int16ul,
+    "unk_word_00"               / Int16ul,
+    "opcodes"                   / If(lambda ctx: ctx.length != 0, Array(lambda ctx: ctx.length / 4 - 1, dbase100_opcode))
+)
+
+dbase100_action_offset = Struct(
+    "offset"                    / Int32ul,
+    "entry"                     / If(lambda ctx: ctx.offset != 0, Pointer(lambda ctx: ctx.offset, dbase100_action_entry))
+)
+
 dbase100_file = Struct(
     "signature"                 / Const("DBASE100"),     # + 0x00
     "filesize"                  / Int32ul,               # + 0x08
     "unk_dword_02"              / Int32ul,               # + 0x0C
     "nb_dbase100_inventory"     / Int32ul,               # + 0x10
     "dbase100_table_inventory"  / Int32ul,               # + 0x14        // offset
-    "unk_dword_05"              / Int32ul,               # + 0x18
-    "ns_offset_01"              / Int32ul,               # + 0x1C        // offset
+    "nb_dbase100_action"        / Int32ul,               # + 0x18
+    "dbase100_table_action"     / Int32ul,               # + 0x1C        // offset
     "nb_dbase400_cutscene"      / Int32ul,               # + 0x20        // nb * 0x14
     "dbase400_table_cutscene"   / Int32ul,               # + 0x24        // offset
     "nb_dbase400_interface"     / Int32ul,               # + 0x28        // nb * 0x04
@@ -94,7 +110,7 @@ dbase100_file = Struct(
     "dbase100_offset_inventory" / Pointer(lambda ctx: ctx.dbase100_table_inventory, Array(lambda ctx: ctx.nb_dbase100_inventory, dbase100_inventory_offset)),
     "dbase400_offset_cutscene"  / Pointer(lambda ctx: ctx.dbase400_table_cutscene, Array(lambda ctx: ctx.nb_dbase400_cutscene, dbase100_cutscene_entry)),
     "dbase400_offset_interface" / Pointer(lambda ctx: ctx.dbase400_table_interface, Array(lambda ctx: ctx.nb_dbase400_interface, Int32ul)),
-    "dbase100_offset_01"        / OnDemandPointer(lambda ctx: ctx.ns_offset_01, Array(lambda ctx: ctx.unk_dword_05, Int32ul))
+    "dbase100_offset_01"        / Pointer(lambda ctx: ctx.dbase100_table_action, Array(lambda ctx: ctx.nb_dbase100_action, dbase100_action_offset))
 )
 
 dbase400_entry = Aligned(4, Struct(
@@ -146,42 +162,5 @@ if __name__ == '__main__':
         db400_entry = dbase400_entry.parse_stream(db400_stream)
         print "db400 interface: " + str(db400_entry)
 
-    print "[+] unk_dword_05 : 0x%08X" % dbfile.unk_dword_05
-    print "[+] ns_offset_01 : 0x%08X" % dbfile.ns_offset_01
-    stream.seek(dbfile.ns_offset_01, 0x00)
-    print hexdump(stream.read(0x20))
-    
-#    for db100_offset in dbfile.dbase100_offset_inventory():   # sizeof == +0x18
-#
-#        # + 0x10 // ???
-#        # + 0x14 // SFX INDEX
-#
-#        if (db100_offset >= 0x69A0 and (db100_offset + 0x18) <= 0x69A0):
-#            print hex(db100_offset)
-#            print "FUUU!!"
-#            exit(0)
-#
-#        stream.seek(db100_offset + 0x10, 0x00)
-#        v = Int32ul.parse(stream.read(4))
-#        db400_stream.seek(v, 0x00)
-#        db400_entry = dbase400_entry.parse_stream(db400_stream)
-#        print "db400 sec. stream: " + str(db400_entry)
-        
-    i = []
-    for db100_offset in dbfile.dbase100_offset_01():   # sizeof == +0x18
-        i.append(db100_offset)
-        #if db100_offset == 0x00:
-            #continue
-        #stream.seek(db100_offset, 0x00)
-        #import struct
-        #v = struct.unpack("<I", stream.read(4))[0]
-        #print v
-        #db400_stream.seek(db100_offset, 0x00)
-        #db400_entry = dbase400_entry.parse_stream(db400_stream)
-        #print db400_entry
-    print sorted(i)
-    #stream.seek(dbfile.dbase400_table_offset, 0x00)
-    #print hexdump(stream.read(0x20))
-    
     #sfx = SFX(args.sfx_file)
     #sfx.extract_all(args.output_directory)
