@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    stream = open(args.dbase_file)
+    stream = open(args.dbase_file, "rb")
     #dbfile = dbase400_file.parse_stream
     #print dbfile
     dbfile = dbase100_file.parse_stream(stream)
