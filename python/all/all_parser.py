@@ -1,7 +1,13 @@
 import os
-import construct
 import argparse
 from PIL import Image
+
+from construct import *
+
+import sys
+sys.path.append(os.path.abspath(__file__ + "\..\.."))
+
+from utils import align_4, hexdump, createdir, uncomp
 
 # Built for construct >= 2.8
 # Version 2.8 was released on September, 2016.
@@ -10,9 +16,9 @@ from PIL import Image
 # and Sequences.
 # Most classes were redesigned and reimplemented. You should read the
 # documentation again.
-if 2 <= construct.version[0] and 8 > construct.version[1]:
+if 2 <= version[0] and 8 > version[1]:
     raise ValueError("Built for construct >= 2.8 only")
-    
+
 palette = [
 (0x00, 0x00, 0x00),(0x00, 0x00, 0x00),(0x04, 0x44, 0x20),(0x48, 0x6C, 0x50),
 (0x00, 0x50, 0x28),(0x34, 0x64, 0x40),(0x08, 0x3C, 0x1C),(0x00, 0x00, 0x00),
@@ -78,120 +84,66 @@ palette = [
 (0xE4, 0x84, 0x28),(0x00, 0x00, 0x00),(0xF4, 0x7C, 0x1C),(0x00, 0x00, 0x00),
 (0xFC, 0xC8, 0x50),(0x00, 0x00, 0x00),(0xFC, 0xA8, 0x3C),(0x00, 0x00, 0x00),
 (0xC0, 0x88, 0x30),(0x00, 0x00, 0x00),(0x48, 0x54, 0x68),(0x70, 0x00, 0xC8)]
-    
-def align_4(x):
-    return ((((x) + 3) >> 2) << 2)
-    
-def hexdump(src, length=16):
-    FILTER = ''.join([(len(repr(chr(x))) == 3) and chr(x) or '.' for x in range(256)])
-    lines = []
-    for c in xrange(0, len(src), length):
-        chars = src[c:c+length]
-        hex = ' '.join(["%02x" % ord(x) for x in chars])
-        printable = ''.join(["%s" % ((ord(x) <= 127 and FILTER[ord(x)]) or '.') for x in chars])
-        lines.append("%04x  %-*s  %s\n" % (c, length*3, hex, printable))
-    return ''.join(lines).rstrip('\n')
-    
-def createdir(dirname):
-    try:
-        os.stat(dirname)
-    except:
-        os.mkdir(dirname)
-    
-### Icon info entry
-all_info_entry = construct.Struct(
-    "offset"        / construct.Int32ul,   # + 0x00
-    "length"        / construct.Int32ul    # + 0x04 ; LENGTH MUST BE ALIGNED TO 4 !
+
+#
+# Icon info entry
+#
+all_info_entry_s = Struct(
+    "offset"        / Int32ul,   # + 0x00
+    "length"        / Int32ul    # + 0x04 ; LENGTH MUST BE ALIGNED TO 4 !
 )
-    
-### Icon entry
-all_entry = construct.Struct(
-    "info"          / all_info_entry,
-    construct.OnDemandPointer(lambda ctx: ctx.info.offset,
-        "entry"     / construct.Struct("flag"          / construct.Int16ul,     # Always 3 ?!
-                         "unk_word_00"   / construct.Int16ul,
-                         "width"         / construct.Int16ul,
-                         "height"        / construct.Int16ul,
-                         construct.OnDemand(construct.Array(lambda ctx: align_4(ctx._.info.length) - 0x08, "data" / construct.Byte))
+
+#
+# Icon entry
+#
+all_entry_s = Struct(
+    "info"          / all_info_entry_s,
+    OnDemandPointer(lambda ctx: ctx.info.offset,
+        "entry"     / Struct("flag"         / Int16ul,     # Always 3 ?!
+                         "unk_word_00"      / Int16ul,
+                         "width"            / Int16ul,
+                         "height"           / Int16ul,
+                         "data"             / OnDemand(Bytes(lambda ctx: align_4(ctx._.info.length) - 0x08))
 )))
 
 #
 # ALL file
 #
-all_file = construct.Struct(
-    "all_entries"  / construct.Array(0x79, all_entry)
+all_file_s = Struct(
+    "all_entries" / Array(0x7A, all_entry_s),
+    #"all_entries" / RepeatUntil(moo, all_entry_s),
 )
 
-def uncomp(buf, size):
-    res_buf = ""
-    pos = 0x00
-    while size > 0:
-        while True:
-            if size == 0:
-                return res_buf
-            r = buf[pos : pos+1]
-            pos = pos + 1
-            if ord(r) >= 0xF1:
-                break
-            res_buf += r
-            size = size - 1
-        nb = (ord(r) + 0x10) & 0xFF
-        res_buf += ((buf[pos:pos + 1]) * nb)
-        pos = pos + 1
-        size = size - nb
-    return res_buf
-    
-class AllF:
+class AllFile:
     def __init__(self, filename):
         self.stream = open(filename, "rb")
-        self.all_file = all_file.parse_stream(self.stream)
+        self.all_file_c = all_file_s.parse_stream(self.stream)
 
     def extract_index(self, index):
-        if index >= len(self.all_file.all_entries):
+        if index >= len(self.all_file_c.all_entries):
             return ""
-        entry = self.all_file.all_entries[index].entry()
-        pixels = uncomp(''.join(chr(x) for x in entry.data()), entry.width * entry.height)
-        return pixels
-        
+        entry = self.all_file_c.all_entries[index].entry()
+        return uncomp(entry.data(), entry.width * entry.height)
+
     def extract_all(self, outdir):
         createdir(outdir)
-        for nb, e in enumerate(self.all_file.all_entries):
+        for nb, e in enumerate(self.all_file_c.all_entries):
             entry = e.entry()
-            pixels = uncomp(''.join(chr(x) for x in entry.data()), entry.width * entry.height)
+            print entry
+            pixels = uncomp(entry.data(), entry.width * entry.height)
             img_data = ""
             for i in xrange(0, len(pixels)):
                 img_data += chr(palette[ord(pixels[i])][0]) + chr(palette[ord(pixels[i])][1]) + chr(palette[ord(pixels[i])][2])
-            i = Image.frombuffer("RGB", (entry.width, entry.height), img_data)
-            i = i.transpose(Image.FLIP_TOP_BOTTOM)
+            i = Image.frombuffer("RGB", (entry.width, entry.height), img_data, "raw", "RGB", 0, 1)
             i.save(outdir + "/%d.png" % nb)
-    
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='all extract launch options')
     parser.add_argument('all_file', action='store', default='', help='all file to extract')
     parser.add_argument('-o', dest='output_directory', help="Output directory", required=True, metavar='output_directory')
-    
+
     args = parser.parse_args()
-    
-    allf = AllF(args.all_file)
+
+    allf = AllFile(args.all_file)
+    #print allf.all_file_c
     allf.extract_all(args.output_directory)
-    
-    #stream = open(args.all_file, "rb")
-    #allf = all_file.parse_stream(stream)
-    #for nb, e in enumerate(allf.all_entries):
-    #    print e.info
-    #    entry = e.entry()
-    #    print entry
-    #    print e.info.offset + align_4(e.info.length)
-    #    print hexdump(''.join(chr(x) for x in entry.data()))
-    #    res_buf = uncomp(''.join(chr(x) for x in entry.data()), entry.width * entry.height)
-    #    print len(res_buf)
-    #    new_buf = ""
-    #    print hexdump(res_buf, entry.width)
-    #    #exit(0)
-    #    for i in xrange(0, len(res_buf)):
-    #         new_buf += chr(palette[ord(res_buf[i])][0]) + chr(palette[ord(res_buf[i])][1]) + chr(palette[ord(res_buf[i])][2])
-    #    i = Image.frombuffer("RGB", (entry.width, entry.height), new_buf)
-    #    i = i.transpose(Image.FLIP_TOP_BOTTOM)
-    #    i.save("res_dir/%d.png" % nb)
-    #    print "-" * 20
-    #    #exit(0)
