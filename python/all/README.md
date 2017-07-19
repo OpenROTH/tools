@@ -28,12 +28,13 @@ Extract icons from .ALL file format
 
 #### Get pixels
 
-    ```python
-    import all_parser
-    allf = all_parser.AllF("D:\Game\Realms of the Haunting\DATA\DATA\ICONS.ALL")
-    pixels = allf.extract_index(0x78)
-    print all_parser.hexdump(pixels, 26)
-    ```
+```python
+import all_parser
+allf = all_parser.AllF("D:\Game\Realms of the Haunting\DATA\DATA\ICONS.ALL")
+pixels = allf.extract_index(0x78)
+print all_parser.hexdump(pixels, 26)
+```
+
     0000  76 76 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   vv........................
     001a  76 20 76 76 76 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   v vvv.....................
     0034  78 76 20 ec 0c 76 76 76 76 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   xv ..vvvv.................
